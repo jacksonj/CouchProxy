@@ -77,48 +77,55 @@ class CouchProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         """
         All methods should be treated the same...
         """
-        # Read the request
-        host, port = self.client_address
-        content_length = int(self.headers.getheader("Content-Length", 0))
-        fwdHeaders = self.get_headers()
-        body = self.rfile.read(content_length)
+        try:
+            # Read the request
+            host, port = self.client_address
+            content_length = int(self.headers.getheader("Content-Length", 0))
+            fwdHeaders = self.get_headers()
+            body = self.rfile.read(content_length)
         
-        # Debug logging
-        self.log_debug("  Request headers:")
-        for k in self.headers:
-            self.log_debug("    %s: %s", k, self.headers[k])
-        self.log_debug("  Forwarded headers:")
-        for k in fwdHeaders:
-            self.log_debug("    %s: %s", k, fwdHeaders[k])
+            # Debug logging
+            self.log_debug("  Request headers:")
+            for k in self.headers:
+                self.log_debug("    %s: %s", k, self.headers[k])
+            self.log_debug("  Forwarded headers:")
+            for k in fwdHeaders:
+                self.log_debug("    %s: %s", k, fwdHeaders[k])
         
-        # Get affinity header if required
-        affinity = self.server.affinity.get_session(host, self)
-        if affinity:
-            self.add_cookie(fwdHeaders, affinity)
+            # Get affinity header if required
+            affinity = self.server.affinity.get_session(host, self)
+            if affinity:
+                self.add_cookie(fwdHeaders, affinity)
         
-        # Forward on the request
-        result, response = self.client.makeRequest(self.path, method, fwdHeaders, body)
+            # Forward on the request
+            result, response = self.client.makeRequest(self.path, method, fwdHeaders, body)
         
-        # Start an affinity session if required
-        self.server.affinity.start_session(host, response, self)
+            # Start an affinity session if required
+            self.server.affinity.start_session(host, response, self)
         
-        # Return the result
-        self.send_response(response.status)
+            # Return the result
+            self.send_response(response.status)
         
-        # Send / log headers
-        # TODO: Strip affinity cookie SetCookie header
-        self.log_debug("  Response headers:")
-        for k in response:
-            if k != "status":
-                self.send_header(k, response[k])
-                self.log_debug("      %s: %s", k, response[k])
-        self.end_headers()
+            # Send / log headers
+            # TODO: Strip affinity cookie SetCookie header
+            self.log_debug("  Response headers:")
+            for k in response:
+                if k != "status":
+                    self.send_header(k, response[k])
+                    self.log_debug("      %s: %s", k, response[k])
+            self.end_headers()
         
-        # Write the response data
-        self.wfile.write(result)
+            # Write the response data
+            self.wfile.write(result)
         
-        # All done!
-        self.log_request(response.status, len(result))
+            # All done!
+            self.log_request(response.status, len(result))
+        except:
+            self.send_response(500)
+            self.end_headers()
+            message = "Error handling request"
+            self.wfile.write(message)
+            senf.log_request(500, len(message))
     
     def do_PUT(self):
         self.log_request()
