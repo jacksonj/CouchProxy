@@ -5,6 +5,8 @@ class CouchProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     The HTTP handler for incoming proxy requests
     """
     
+    # The list of headers from the CouchDB client which will be
+    # forwaded to the onward host
     FWD_HEADERS = ("Accept", "Accept-Charset", "Accept-Encoding",
                    "Content-Type", "User-Agent", "Content-Length",
                    "X-Couch-Full-Commit", "Cookie", "Set-Cookie")
@@ -40,7 +42,7 @@ class CouchProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         """
         self.logger.log_debug(self.address_string(), format, *args)
     
-    def get_headers(self):
+    def get_request_headers(self):
         """
         Parses the request headers and returns a dictionary
         of all to be forwarded to the remote host
@@ -52,7 +54,31 @@ class CouchProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                 ret_headers[k] = v
                 
         return ret_headers
-    
+        
+    def get_response_headers(self, response):
+        """
+        Parses the request headers and returns a dictionary
+        of all the to be forwaded back to the calling client.
+        Strips off the affinity session SetCookie request, if
+        present
+        """
+        ret_headers = {}
+        for h in response:
+            # Ignore httplib2 stuff
+            if h not in ('fromcache', 'version', 'status',
+                         'reason', 'previous', 'content-location'):
+                # Do not pass back the cmsweb front-end cookie
+                if h == 'set-cookie':
+                    k, v = response[h].strip().split('=')
+                    if k != 'CmsAffinity':
+                        # This Set-Cookie header can be passed back
+                        ret_headers[h] = response[h]
+                else:
+                    # Return this header
+                    ret_headers[h] = response[h]
+                    
+        return ret_headers
+                
     def add_cookie(self, headers, cookie):
         """
         Adds a cookie to the request headers
@@ -81,7 +107,7 @@ class CouchProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             # Read the request
             host, port = self.client_address
             content_length = int(self.headers.getheader("Content-Length", 0))
-            fwdHeaders = self.get_headers()
+            fwdHeaders = self.get_request_headers()
             body = self.rfile.read(content_length)
         
             # Debug logging
@@ -108,11 +134,12 @@ class CouchProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         
             # Send / log headers
             # TODO: Strip affinity cookie SetCookie header
+            
             self.log_debug("  Response headers:")
-            for k in response:
-                if k != "status":
-                    self.send_header(k, response[k])
-                    self.log_debug("      %s: %s", k, response[k])
+            retHeaders = self.get_response_headers(response)
+            for k in retHeaders:
+                self.send_header(k, retHeaders[k])
+                self.log_debug("      %s: %s", k, retHeaders[k])
             self.end_headers()
         
             # Write the response data
