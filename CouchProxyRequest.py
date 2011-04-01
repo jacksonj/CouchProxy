@@ -24,20 +24,23 @@ class CouchProxyRequest:
         """
         # Form complete URI
         uri = self.host + resource
-    
+        
         # Now attempt to send the request
         try:
             response, result = self.conn.request(uri, method = verb,
-                                    body = body, headers = headers)
+                                    body = body, headers = headers,
+                                    connection_type = self.con_type)
             if response.status == 408: # timeout can indicate a socket error
                 response, result = self.conn.request(uri, method = verb,
-                                        body = body, headers = headers)
+                                        body = body, headers = headers,
+                                        connection_type = self.con_type)
         except (socket.error, AttributeError):
             [conn.close() for conn in self.conn.connections.values()]
             # ... try again... if this fails propagate error to client
             try:
                 response, result = self.conn.request(uri, method = verb,
-                                        body = body, headers = headers)
+                                        body = body, headers = headers,
+                                        connection_type = self.con_type)
             except AttributeError:
                 # socket/httplib really screwed up - nuclear option
                 self.conn.connections = {}
@@ -51,11 +54,13 @@ class CouchProxyRequest:
         method getting an HTTPConnection
         """
         return httplib2.Http(".cache", 30)
+        self.con_type = None
     
-    def _getSSLURLOpener(self, cert, key, hostnam):
+    def _getSSLURLOpener(self, cert, key):
         """
         method getting a secure (HTTPS) connection
         """
         http = httplib2.Http(".cache", 30)
-        http.add_certificate(key=key, cert=cert, domain=self.host)
+        http.add_certificate(key=key, cert=cert, domain='')
+        self.con_type = httplib2.HTTPSConnectionWithTimeout
         return http

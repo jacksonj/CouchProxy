@@ -76,7 +76,7 @@ class CouchProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                 else:
                     # Return this header
                     ret_headers[h] = response[h]
-                    
+        
         return ret_headers
                 
     def add_cookie(self, headers, cookie):
@@ -134,9 +134,16 @@ class CouchProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         
             # Send / log headers
             # TODO: Strip affinity cookie SetCookie header
-            
             self.log_debug("  Response headers:")
             retHeaders = self.get_response_headers(response)
+            
+            # Handle a chunked response - the client has unfolded this
+            # so we need to add a content-length header
+            if retHeaders.has_key('transfer-encoding') and retHeaders['transfer-encoding'] == 'chunked':
+                del retHeaders['transfer-encoding']
+                retHeaders['content-length'] = len(result)
+            
+            # Send all headers
             for k in retHeaders:
                 self.send_header(k, retHeaders[k])
                 self.log_debug("      %s: %s", k, retHeaders[k])
@@ -152,7 +159,7 @@ class CouchProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             self.end_headers()
             message = "Error handling request"
             self.wfile.write(message)
-            senf.log_request(500, len(message))
+            self.log_request(500, len(message))
     
     def do_PUT(self):
         self.log_request()
