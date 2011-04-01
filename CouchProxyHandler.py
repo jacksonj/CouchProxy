@@ -69,8 +69,7 @@ class CouchProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                          'reason', 'previous', 'content-location'):
                 # Do not pass back the cmsweb front-end cookie
                 if h == 'set-cookie':
-                    k, v = response[h].strip().split('=')
-                    if k != 'CmsAffinity':
+                    if response[h].find("cms-node=") < 0:
                         # This Set-Cookie header can be passed back
                         ret_headers[h] = response[h]
                 else:
